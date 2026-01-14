@@ -1,0 +1,6 @@
+# flyctl launch added from .gitignore
+# Ignore data directory
+**/data/ 
+# Ignore database file
+**/*.db 
+fly.toml

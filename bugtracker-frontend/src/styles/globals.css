@@ -1,0 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.duration-2000 {
+  transition-duration: 2000ms;
+}
