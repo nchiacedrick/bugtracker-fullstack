@@ -1,0 +1,57 @@
+name: Fullstack CI/CD
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: Agent-1
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # --------------------
+      # Backend (Go)
+      # --------------------
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.23'
+
+      - name: Go mod download
+        working-directory: bugtracker-backend
+        run: go mod download
+
+      - name: Build backend
+        working-directory: bugtracker-backend
+        run: go build -v ./cmd/...
+
+      - name: Test backend
+        working-directory: bugtracker-backend
+        run: go test -v ./...
+
+      # --------------------
+      # Frontend (React)
+      # --------------------
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: bugtracker-frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: bugtracker-frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: bugtracker-frontend
+        run: npm run build
+
+      - name: Test frontend
+        working-directory: bugtracker-frontend
+        run: npm test -- --watch=false
