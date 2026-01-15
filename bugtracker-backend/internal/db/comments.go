@@ -2,37 +2,30 @@ package db
 
 import (
 	"bugtracker-backend/internal/models"
-	"encoding/json"
+	"database/sql"
 	"fmt"
 	"strconv"
 	"time"
-
-	"github.com/google/uuid"
-	"go.etcd.io/bbolt"
 )
 
 func CreateComment(bugID string, comment *models.Comment) error {
 	comment.CreatedAt = time.Now()
-	comment.ID = int(uuid.New().ID())
 	var err error
 	comment.BugID, err = strconv.Atoi(bugID)
 	if err != nil {
 		return fmt.Errorf("invalid bug ID format")
 	}
 
-	_, err = GetBug(comment.BugID)
-	if err != nil {
+	// ensure bug exists
+	if _, err := GetBug(comment.BugID); err != nil {
 		return fmt.Errorf("bug not found")
 	}
 
-	return db.Update(func(tx *bbolt.Tx) error {
-		b := tx.Bucket(commentsBucket)
-		encoded, err := json.Marshal(comment)
-		if err != nil {
-			return fmt.Errorf("failed to marshal comment: %v", err)
-		}
-		return b.Put(itob(comment.ID), encoded)
-	})
+	query := `INSERT INTO comments (bug_id, content, author, created_at) VALUES ($1,$2,$3,$4) RETURNING id`
+	if err := db.QueryRow(query, comment.BugID, comment.Content, comment.Author, comment.CreatedAt).Scan(&comment.ID); err != nil {
+		return fmt.Errorf("failed to insert comment: %w", err)
+	}
+	return nil
 }
 
 func GetComments(bugID string) ([]models.Comment, error) {
@@ -42,24 +35,29 @@ func GetComments(bugID string) ([]models.Comment, error) {
 		return nil, fmt.Errorf("invalid bug ID format")
 	}
 
-	_, err = GetBug(bugIDInt)
-	if err != nil {
+	if _, err := GetBug(bugIDInt); err != nil {
 		return nil, fmt.Errorf("bug not found")
 	}
 
-	err = db.View(func(tx *bbolt.Tx) error {
-		b := tx.Bucket(commentsBucket)
-		return b.ForEach(func(k, v []byte) error {
-			var comment models.Comment
-			if err := json.Unmarshal(v, &comment); err != nil {
-				return err
-			}
-			if comment.BugID == bugIDInt {
-				comments = append(comments, comment)
-			}
-			return nil
-		})
-	})
+	rows, err := db.Query(`SELECT id, bug_id, content, author, created_at FROM comments WHERE bug_id=$1 ORDER BY id`, bugIDInt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return comments, nil
+		}
+		return nil, fmt.Errorf("failed to query comments: %w", err)
+	}
+	defer rows.Close()
 
-	return comments, err
+	for rows.Next() {
+		var c models.Comment
+		if err := rows.Scan(&c.ID, &c.BugID, &c.Content, &c.Author, &c.CreatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan comment: %w", err)
+		}
+		comments = append(comments, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
+	}
+
+	return comments, nil
 }
