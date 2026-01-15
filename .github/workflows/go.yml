@@ -47,6 +47,8 @@ jobs:
 
       - name: Test backend
         working-directory: bugtracker-backend
+        env:
+          TEST_DATABASE_URL: postgres://testuser:testpassword@127.0.0.1:5435/testdb?sslmode=disable
         run: go test -v ./...
 
       # --------------------
